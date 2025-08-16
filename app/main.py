@@ -1,0 +1,101 @@
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+import time
+import os
+from app.routers import auth, participants, teams, team_requests, admin, discovery
+from app.core.database import create_missing_tables
+
+app = FastAPI(
+    title="Mathrix API",
+    description="AI-Powered Team Formation Platform API",
+    version="1.0.0",
+    docs_url="/docs" if os.getenv("DEBUG", "false").lower() == "true" else None,
+    redoc_url="/redoc" if os.getenv("DEBUG", "false").lower() == "true" else None
+)
+
+# Production security middleware
+if os.getenv("DEBUG", "false").lower() != "true":
+    app.add_middleware(
+        TrustedHostMiddleware, 
+        allowed_hosts=["*"]  # Configure this based on your domain
+    )
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://mathrix-frontend.onrender.com",  # Update with your frontend URL
+        "https://*.onrender.com"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Request timing middleware
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "version": "1.0.0",
+        "environment": os.getenv("ENVIRONMENT", "production")
+    }
+
+# Root endpoint
+@app.get("/")
+async def root():
+    return {
+        "message": "Welcome to Mathrix API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+# Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(participants.router, prefix="/api/participants", tags=["Participants"])
+app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
+app.include_router(team_requests.router, prefix="/api/team-requests", tags=["Team Requests"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(discovery.router, prefix="/api/discovery", tags=["Discovery"])
+
+# Startup event
+@app.on_event("startup")
+async def startup_event():
+    print("🚀 Starting Mathrix API...")
+    try:
+        create_missing_tables()
+        print("✅ Database tables initialized successfully!")
+    except Exception as e:
+        print(f"⚠️ Warning: Database initialization failed: {e}")
+
+# Shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    print("🛑 Shutting down Mathrix API...")
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "timestamp": time.time(),
+            "path": str(request.url)
+        }
+    )
