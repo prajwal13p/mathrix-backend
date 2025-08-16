@@ -16,7 +16,64 @@ def create_missing_tables():
     """Create missing tables if they don't exist"""
     try:
         with engine.connect() as connection:
-            # Check if team_requests table exists
+            # First, create base tables if they don't exist
+            # Check if participants table exists
+            result = connection.execute(text("""
+                SELECT COUNT(*) 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'participants'
+            """))
+            
+            if result.scalar() == 0:
+                print("🔧 Creating participants table...")
+                connection.execute(text("""
+                    CREATE TABLE participants (
+                        participant_id UUID PRIMARY KEY,
+                        email VARCHAR(255) UNIQUE NOT NULL,
+                        usn VARCHAR(20) UNIQUE NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        phone VARCHAR(20) NULL,
+                        department VARCHAR(100) NULL,
+                        semester VARCHAR(10) NULL,
+                        skills JSON NULL,
+                        team_id UUID NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                connection.commit()
+                print("✅ participants table created successfully!")
+            
+            # Check if teams table exists
+            result = connection.execute(text("""
+                SELECT COUNT(*) 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'teams'
+            """))
+            
+            if result.scalar() == 0:
+                print("🔧 Creating teams table...")
+                connection.execute(text("""
+                    CREATE TABLE teams (
+                        team_id UUID PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        leader_id UUID NOT NULL,
+                        description TEXT NULL,
+                        is_locked BOOLEAN DEFAULT FALSE,
+                        is_open_to_requests BOOLEAN DEFAULT TRUE,
+                        max_members VARCHAR(10) DEFAULT '4',
+                        tags VARCHAR(200) NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (leader_id) REFERENCES participants(participant_id)
+                    )
+                """))
+                connection.commit()
+                print("✅ teams table created successfully!")
+            
+            # Now create team_requests table (after base tables exist)
             result = connection.execute(text("""
                 SELECT COUNT(*) 
                 FROM information_schema.tables 
@@ -25,7 +82,7 @@ def create_missing_tables():
             """))
             
             if result.scalar() == 0:
-                print("🔧 Creating missing team_requests table...")
+                print("🔧 Creating team_requests table...")
                 connection.execute(text("""
                     CREATE TABLE team_requests (
                         request_id UUID PRIMARY KEY,
@@ -60,7 +117,7 @@ def create_missing_tables():
                 connection.commit()
                 print("✅ team_requests table created successfully!")
             
-            # Check if teams table has new columns
+            # Check if teams table has new columns and add them if missing
             result = connection.execute(text("""
                 SELECT COUNT(*) 
                 FROM information_schema.columns 
@@ -71,26 +128,29 @@ def create_missing_tables():
             
             if result.scalar() == 0:
                 print("🔧 Adding new columns to teams table...")
-                connection.execute(text("""
-                    ALTER TABLE teams 
-                    ADD COLUMN description TEXT NULL,
-                    ADD COLUMN is_locked BOOLEAN DEFAULT FALSE,
-                    ADD COLUMN is_open_to_requests BOOLEAN DEFAULT TRUE,
-                    ADD COLUMN max_members VARCHAR(10) DEFAULT '4',
-                    ADD COLUMN tags VARCHAR(200) NULL
-                """))
-                
-                # Update existing teams with default values
-                connection.execute(text("""
-                    UPDATE teams SET 
-                        is_locked = FALSE,
-                        is_open_to_requests = TRUE,
-                        max_members = '4'
-                    WHERE is_locked IS NULL
-                """))
-                
-                connection.commit()
-                print("✅ Teams table updated successfully!")
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE teams 
+                        ADD COLUMN description TEXT NULL,
+                        ADD COLUMN is_locked BOOLEAN DEFAULT FALSE,
+                        ADD COLUMN is_open_to_requests BOOLEAN DEFAULT TRUE,
+                        ADD COLUMN max_members VARCHAR(10) DEFAULT '4',
+                        ADD COLUMN tags VARCHAR(200) NULL
+                    """))
+                    
+                    # Update existing teams with default values
+                    connection.execute(text("""
+                        UPDATE teams SET 
+                            is_locked = FALSE,
+                            is_open_to_requests = TRUE,
+                            max_members = '4'
+                        WHERE is_locked IS NULL
+                    """))
+                    
+                    connection.commit()
+                    print("✅ Teams table updated successfully!")
+                except Exception as alter_error:
+                    print(f"⚠️ Warning: Could not alter teams table: {alter_error}")
                 
     except Exception as e:
         print(f"⚠️ Warning: Could not create missing tables: {e}")
@@ -102,5 +162,4 @@ def get_db():
     finally:
         db.close()
 
-# Create missing tables on import
-create_missing_tables()
+# Tables will be created on startup via main.py

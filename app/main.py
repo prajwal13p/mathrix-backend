@@ -4,7 +4,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 import time
 import os
-from app.routers import auth, participants, teams, team_requests, admin, discovery
+from app.routers import auth, participants, teams, team_formation, admin
 from app.core.database import create_missing_tables
 
 app = FastAPI(
@@ -69,9 +69,8 @@ async def root():
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(participants.router, prefix="/api/participants", tags=["Participants"])
 app.include_router(teams.router, prefix="/api/teams", tags=["Teams"])
-app.include_router(team_requests.router, prefix="/api/team-requests", tags=["Team Requests"])
+app.include_router(team_formation.router, prefix="/api/team-formation", tags=["Team Formation"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
-app.include_router(discovery.router, prefix="/api/discovery", tags=["Discovery"])
 
 # Startup event
 @app.on_event("startup")
