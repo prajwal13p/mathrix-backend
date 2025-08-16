@@ -25,9 +25,15 @@ async def check_email_exists(
     db: Session = Depends(get_db)
 ):
     """Check if an email already exists in the database"""
-    service = ParticipantService(db)
-    exists = service.check_email_exists(email)
-    return {"exists": exists}
+    try:
+        service = ParticipantService(db)
+        exists = service.check_email_exists(email)
+        return {"exists": exists}
+    except Exception as e:
+        print(f"Error in check_email_exists: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.get("/check-usn/{usn}")
 async def check_usn_exists(
@@ -35,9 +41,15 @@ async def check_usn_exists(
     db: Session = Depends(get_db)
 ):
     """Check if a USN already exists in the database"""
-    service = ParticipantService(db)
-    exists = service.check_usn_exists(usn)
-    return {"exists": exists}
+    try:
+        service = ParticipantService(db)
+        exists = service.check_usn_exists(usn)
+        return {"exists": exists}
+    except Exception as e:
+        print(f"Error in check_usn_exists: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @router.get("/{participant_id}", response_model=ParticipantResponse)
 async def get_participant(

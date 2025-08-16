@@ -1,7 +1,9 @@
+from pydoc import text
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 import time
 import os
 from app.routers import auth, participants, teams, team_formation, admin
@@ -57,6 +59,29 @@ async def health_check():
         "version": "1.0.0",
         "environment": os.getenv("ENVIRONMENT", "production")
     }
+
+# Database health check endpoint
+@app.get("/health/db")
+async def database_health_check():
+    try:
+        from app.core.database import get_db
+        db = next(get_db())
+        # Try a simple query
+        result = db.execute(text("SELECT 1"))
+        result.scalar()
+        db.close()
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "error",
+            "error": str(e),
+            "timestamp": time.time()
+        }
 
 # Root endpoint
 @app.get("/")
