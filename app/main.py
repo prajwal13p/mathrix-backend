@@ -83,6 +83,24 @@ async def database_health_check():
             "timestamp": time.time()
         }
 
+# Manual migration trigger endpoint
+@app.post("/admin/migrate-db")
+async def trigger_migration():
+    try:
+        from app.core.database import migrate_existing_tables
+        migrate_existing_tables()
+        return {
+            "status": "success",
+            "message": "Database migration completed",
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Migration failed: {str(e)}",
+            "timestamp": time.time()
+        }
+
 # Root endpoint
 @app.get("/")
 async def root():

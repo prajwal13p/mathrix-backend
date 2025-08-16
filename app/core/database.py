@@ -168,24 +168,57 @@ def migrate_existing_tables():
             if result.scalar() == 0:
                 print("🔧 Migrating participants table to new schema...")
                 try:
-                    # Add missing columns
-                    connection.execute(text("""
-                        ALTER TABLE participants 
-                        ADD COLUMN password_hash VARCHAR(255) DEFAULT 'temp_hash',
-                        ADD COLUMN skills JSON DEFAULT '[]'::json
-                    """))
-                    
-                    # Remove old columns if they exist
+                    # First try to add columns
                     try:
-                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS phone"))
-                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS department"))
-                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS semester"))
-                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS updated_at"))
-                    except:
-                        pass  # Columns might not exist
-                    
-                    connection.commit()
-                    print("✅ Participants table migrated successfully!")
+                        connection.execute(text("""
+                            ALTER TABLE participants 
+                            ADD COLUMN password_hash VARCHAR(255) DEFAULT 'temp_hash',
+                            ADD COLUMN skills JSON DEFAULT '[]'::json
+                        """))
+                        connection.commit()
+                        print("✅ Participants table migrated successfully!")
+                    except Exception as alter_error:
+                        print(f"⚠️ Alter failed, trying to recreate table: {alter_error}")
+                        
+                        # If alter fails, recreate the table
+                        # First backup existing data
+                        try:
+                            backup_result = connection.execute(text("SELECT * FROM participants"))
+                            existing_data = backup_result.fetchall()
+                            print(f"📋 Backed up {len(existing_data)} existing participants")
+                        except:
+                            existing_data = []
+                            print("📋 No existing data to backup")
+                        
+                        # Drop and recreate table
+                        connection.execute(text("DROP TABLE IF EXISTS participants CASCADE"))
+                        connection.execute(text("""
+                            CREATE TABLE participants (
+                                participant_id UUID PRIMARY KEY,
+                                email VARCHAR(255) UNIQUE NOT NULL,
+                                usn VARCHAR(20) UNIQUE NOT NULL,
+                                name VARCHAR(255) NOT NULL,
+                                password_hash VARCHAR(255) NOT NULL,
+                                skills JSON NOT NULL,
+                                team_id UUID NULL,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """))
+                        
+                        # Reinsert data if any existed
+                        if existing_data:
+                            for row in existing_data:
+                                try:
+                                    connection.execute(text("""
+                                        INSERT INTO participants (participant_id, email, usn, name, password_hash, skills, team_id, created_at)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                    """), (row[0], row[1], row[2], row[3], 'temp_hash', '[]', row[4] if len(row) > 4 else None, row[5] if len(row) > 5 else None))
+                                except Exception as insert_error:
+                                    print(f"⚠️ Could not reinsert participant {row[0]}: {insert_error}")
+                        
+                        connection.commit()
+                        print("✅ Participants table recreated successfully!")
+                        
                 except Exception as migrate_error:
                     print(f"⚠️ Warning: Could not migrate participants table: {migrate_error}")
                     
