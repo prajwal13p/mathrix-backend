@@ -33,13 +33,10 @@ def create_missing_tables():
                         email VARCHAR(255) UNIQUE NOT NULL,
                         usn VARCHAR(20) UNIQUE NOT NULL,
                         name VARCHAR(255) NOT NULL,
-                        phone VARCHAR(20) NULL,
-                        department VARCHAR(100) NULL,
-                        semester VARCHAR(10) NULL,
-                        skills JSON NULL,
+                        password_hash VARCHAR(255) NOT NULL,
+                        skills JSON NOT NULL,
                         team_id UUID NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """))
                 connection.commit()
@@ -154,6 +151,46 @@ def create_missing_tables():
                 
     except Exception as e:
         print(f"⚠️ Warning: Could not create missing tables: {e}")
+
+def migrate_existing_tables():
+    """Migrate existing tables to new schema if needed"""
+    try:
+        with engine.connect() as connection:
+            # Check if participants table needs migration
+            result = connection.execute(text("""
+                SELECT COUNT(*) 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' 
+                AND table_name = 'participants' 
+                AND column_name = 'password_hash'
+            """))
+            
+            if result.scalar() == 0:
+                print("🔧 Migrating participants table to new schema...")
+                try:
+                    # Add missing columns
+                    connection.execute(text("""
+                        ALTER TABLE participants 
+                        ADD COLUMN password_hash VARCHAR(255) DEFAULT 'temp_hash',
+                        ADD COLUMN skills JSON DEFAULT '[]'::json
+                    """))
+                    
+                    # Remove old columns if they exist
+                    try:
+                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS phone"))
+                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS department"))
+                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS semester"))
+                        connection.execute(text("ALTER TABLE participants DROP COLUMN IF EXISTS updated_at"))
+                    except:
+                        pass  # Columns might not exist
+                    
+                    connection.commit()
+                    print("✅ Participants table migrated successfully!")
+                except Exception as migrate_error:
+                    print(f"⚠️ Warning: Could not migrate participants table: {migrate_error}")
+                    
+    except Exception as e:
+        print(f"⚠️ Warning: Could not migrate existing tables: {e}")
 
 def get_db():
     db = SessionLocal()

@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 import time
 import os
 from app.routers import auth, participants, teams, team_formation, admin
-from app.core.database import create_missing_tables
+from app.core.database import create_missing_tables, migrate_existing_tables
 
 app = FastAPI(
     title="Mathrix API",
@@ -28,8 +28,11 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
-        "https://mathrix-frontend.onrender.com",  # Update with your frontend URL
-        "https://*.onrender.com"
+        "https://mathrix-frontend.onrender.com",
+        "https://*.onrender.com",
+        "https://*.vercel.app",
+        "https://*.netlify.app",
+        "*"  # Allow all origins for now (you can restrict this later)
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -78,6 +81,7 @@ async def startup_event():
     print("🚀 Starting Mathrix API...")
     try:
         create_missing_tables()
+        migrate_existing_tables()
         print("✅ Database tables initialized successfully!")
     except Exception as e:
         print(f"⚠️ Warning: Database initialization failed: {e}")
